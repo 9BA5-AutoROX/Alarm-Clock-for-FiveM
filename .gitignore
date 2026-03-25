@@ -1,0 +1,22 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Local settings
+settings/window.json
+
+# Editors
+.vscode/
+.idea/
