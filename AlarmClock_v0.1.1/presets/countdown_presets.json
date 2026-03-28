@@ -1,0 +1,26 @@
+[
+    {
+        "name": "Feed Mushroom",
+        "time": [
+            1,
+            0,
+            0
+        ]
+    },
+    {
+        "name": "Hatch Egg",
+        "time": [
+            0,
+            30,
+            0
+        ]
+    },
+    {
+        "name": "Upgrade Mushroom",
+        "time": [
+            0,
+            10,
+            0
+        ]
+    }
+]
