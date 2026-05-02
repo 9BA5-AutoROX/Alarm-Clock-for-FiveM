@@ -10,7 +10,8 @@
             "17:00",
             "19:00",
             "21:45"
-        ]
+        ],
+        "sound": "black_market.wav"
     },
     {
         "name": "Flag War",
@@ -18,7 +19,8 @@
             "00:00",
             "14:00",
             "20:00"
-        ]
+        ],
+        "sound": "flag_war.wav"
     },
     {
         "name": "Battle Arena",
@@ -30,7 +32,8 @@
             "17:00",
             "19:00",
             "22:00"
-        ]
+        ],
+        "sound": "battle_arena.wav"
     },
     {
         "name": "Puff Dance",
@@ -41,14 +44,16 @@
             "16:45",
             "20:45",
             "22:45"
-        ]
+        ],
+        "sound": "puff_dance.wav"
     },
     {
         "name": "Restart Server",
         "time": [
             "03:00",
             "18:00"
-        ]
+        ],
+        "sound": "restart_server.wav"
     },
     {
         "name": "Chair Roulette",
@@ -59,6 +64,27 @@
             "21:15",
             "23:15",
             "01:15"
-        ]
+        ],
+        "sound": "chair_roulette.wav"
+    },
+    {
+        "name": "Maze Puzzle",
+        "time": [
+            "02:15",
+            "14:15",
+            "20:15"
+        ],
+        "sound": "maze_puzzle.wav"
+    },
+    {
+        "name": "Front Line",
+        "time": [
+            "01:45",
+            "16:45",
+            "19:45",
+            "21:45",
+            "23:45"
+        ],
+        "sound": "front_line.wav"
     }
 ]

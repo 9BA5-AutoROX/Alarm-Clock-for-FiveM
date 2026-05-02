@@ -33,6 +33,9 @@ MOD_NOREPEAT = 0x4000
 
 HOTKEY_ID = 101  # Unique ID for our lock hotkey
 PRESET_HOTKEY_BASE_ID = 1000  # Base ID for preset hotkeys
+MUSHROOM_HOTKEY_ID = 2000
+COW_5M_HOTKEY_ID = 2001
+COW_V_HOTKEY_ID = 2002
 
 if TYPE_CHECKING:
     from controller.controller import Controller
@@ -74,9 +77,16 @@ class OverlayWindow:
         """
         self._controller = controller
         
-        # Drag tracking variables
-        self._is_flashing = False
+        # Default initialization for widgets defined in _create_widgets
+        self._root = None
+        self._time_label = None 
+        self._status_label = None
+        self._alarm_label = None
         self._is_locked = False
+        self._drag_start_x = 0
+        self._drag_start_y = 0
+        
+        self._is_flashing = {"main": False, "mushroom": False, "cow": False}
         
         # Build the window
         self._create_window()
@@ -170,7 +180,7 @@ class OverlayWindow:
             self._root.geometry(f"+{x}+{y}")
    
     def _create_widgets(self) -> None:
-        """Create the timer display label."""
+        """Create the timer display labels."""
         # Main frame with padding
         self._frame = tk.Frame(
             self._root,
@@ -180,40 +190,68 @@ class OverlayWindow:
         )
         self._frame.pack(fill=tk.BOTH, expand=True)
         
-        # Timer display label
-        self._time_label = tk.Label(
-            self._frame,
-            text="00:00",
+        # --- Main Timer ---
+        self._main_time_label = tk.Label(
+            self._frame, text="00:00",
             font=(self.FONT_FAMILY, self.FONT_SIZE, "bold"),
-            fg=self.TEXT_COLOR_IDLE,
-            bg=self.BG_COLOR
+            fg=self.TEXT_COLOR_IDLE, bg=self.BG_COLOR
         )
-        self._time_label.pack()
+        self._main_time_label.pack()
         
-        # Status label (smaller, below timer)
-        self._status_label = tk.Label(
-            self._frame,
-            text="IDLE",
+        self._main_status_label = tk.Label(
+            self._frame, text="IDLE",
             font=(self.FONT_FAMILY, 12),
-            fg=self.TEXT_COLOR_IDLE,
-            bg=self.BG_COLOR
+            fg=self.TEXT_COLOR_IDLE, bg=self.BG_COLOR
         )
-        self._status_label.pack()
+        self._main_status_label.pack()
+        
+        # --- Sub Timers Frame ---
+        self._sub_frame = tk.Frame(self._frame, bg=self.BG_COLOR)
+        self._sub_frame.pack(fill="x", pady=(5, 5))
+        self._sub_frame.columnconfigure(0, weight=1)
+        self._sub_frame.columnconfigure(1, weight=1)
+        
+        # Mushroom (Left)
+        self._mushroom_time_label = tk.Label(
+            self._sub_frame, text="🍄 00:00", font=(self.FONT_FAMILY, 14, "bold"),
+            fg=self.TEXT_COLOR_IDLE, bg=self.BG_COLOR
+        )
+        self._mushroom_time_label.grid(row=0, column=0, sticky="n")
+        self._mushroom_status_label = tk.Label(
+            self._sub_frame, text="Mushroom", font=(self.FONT_FAMILY, 9),
+            fg=self.TEXT_COLOR_IDLE, bg=self.BG_COLOR
+        )
+        self._mushroom_status_label.grid(row=1, column=0, sticky="n")
 
-        # Alarm status label (third line)
+        # Cow (Right)
+        self._cow_time_label = tk.Label(
+            self._sub_frame, text="🐮 00:00", font=(self.FONT_FAMILY, 14, "bold"),
+            fg=self.TEXT_COLOR_IDLE, bg=self.BG_COLOR
+        )
+        self._cow_time_label.grid(row=0, column=1, sticky="n")
+        self._cow_status_label = tk.Label(
+            self._sub_frame, text="Cow", font=(self.FONT_FAMILY, 9),
+            fg=self.TEXT_COLOR_IDLE, bg=self.BG_COLOR
+        )
+        self._cow_status_label.grid(row=1, column=1, sticky="n")
+
+        # --- Alarm status label ---
         self._alarm_label = tk.Label(
-            self._frame,
-            text="",
+            self._frame, text="",
             font=(self.FONT_FAMILY, 12),
-            fg=self.TEXT_COLOR_WARNING,
-            bg=self.BG_COLOR
+            fg=self.TEXT_COLOR_WARNING, bg=self.BG_COLOR
         )
         self._alarm_label.pack(pady=(2, 0), fill="x")
     
     def _bind_events(self) -> None:
         """Bind mouse events for dragging."""
-        # Bind to all widgets for seamless dragging
-        for widget in (self._root, self._frame, self._time_label, self._status_label):
+        widgets = (
+            self._root, self._frame, self._sub_frame,
+            self._main_time_label, self._main_status_label,
+            self._mushroom_time_label, self._mushroom_status_label,
+            self._cow_time_label, self._cow_status_label, self._alarm_label
+        )
+        for widget in widgets:
             widget.bind("<Button-1>", self._start_drag)
             widget.bind("<B1-Motion>", self._do_drag)
         
@@ -275,48 +313,32 @@ class OverlayWindow:
     # =========================================================================
     
     def _update_display(self):
-        if self._is_flashing:
-            return
-
-        # ---- Countdown state ----
-        display_time = self._controller.get_display_time()
-        self._time_label.config(text=display_time)
-
-        urgency = self._controller.get_urgency_level()
-
-        if urgency == "danger":
-            color = self.TEXT_COLOR_DANGER
-            countdown_status = "URGENT"
-        elif urgency == "warning":
-            color = self.TEXT_COLOR_WARNING
-            countdown_status = "SOON"
-        else:
-            color = self.TEXT_COLOR
-            if self._controller.is_paused:
-                color = self.TEXT_COLOR_PAUSED
-                countdown_status = "PAUSED"
-            else:
-                countdown_status = "RUNNING"
-
-        if self._controller.is_idle:
-            color = self.TEXT_COLOR_IDLE
-            countdown_status = "IDLE"
-
-        self._time_label.config(fg=color)
-        if not self._is_locked:
-            self._status_label.config(text=countdown_status, fg=color)
-        else:
-            self._status_label.config(text="LOCKED", fg="#ff3333")
+        # Update Main Timer
+        if not self._is_flashing["main"]:
+            self._update_timer_block(
+                "main", self._main_time_label, self._main_status_label, "", "IDLE"
+            )
+            
+        # Update Mushroom Timer
+        if not self._is_flashing["mushroom"]:
+            self._update_timer_block(
+                "mushroom", self._mushroom_time_label, self._mushroom_status_label, "🍄 ", "Mushroom"
+            )
+            
+        # Update Cow Timer
+        if not self._is_flashing["cow"]:
+            self._update_timer_block(
+                "cow", self._cow_time_label, self._cow_status_label, "🐮 ", "Cow"
+            )
 
         # ---- Alarm section ----
-        #alarm_status, alarms = ("warning", [(datetime.now(), "TEST EVENT")])
         alarm_status, alarms = self._controller.get_alarm_status()
 
         if not alarms:
             self._alarm_label.config(text="")
         else:
             alarm_time = alarms[0][0].strftime("%H:%M")
-            names = ", ".join(name for _, name in alarms)
+            names = ", ".join(name for _, name, _ in alarms)
             text = f"{alarm_time} - {names}"
 
             if alarm_status == "active":
@@ -329,32 +351,75 @@ class OverlayWindow:
                 color = self.TEXT_COLOR_LOCKED if self._is_locked else self.TEXT_COLOR_IDLE
                 self._alarm_label.config(text=f"⏰ {text}", fg=color)
 
+    def _update_timer_block(self, timer_id, time_lbl, stat_lbl, prefix, idle_text):
+        display_time = self._controller.get_display_time(timer_id)
+        time_lbl.config(text=f"{prefix}{display_time}")
+
+        urgency = self._controller.get_urgency_level(timer_id)
+        if urgency == "danger":
+            color = self.TEXT_COLOR_DANGER
+            status = "URGENT"
+        elif urgency == "warning":
+            color = self.TEXT_COLOR_WARNING
+            status = "SOON"
+        else:
+            color = self.TEXT_COLOR
+            if self._controller.get_state(timer_id) == "PAUSED":
+                color = self.TEXT_COLOR_PAUSED
+                status = "PAUSED"
+            else:
+                status = "RUNNING"
+
+        if self._controller.is_idle(timer_id):
+            color = self.TEXT_COLOR_IDLE
+            status = idle_text
+
+        time_lbl.config(fg=color)
+        if not self._is_locked:
+            stat_lbl.config(text=status, fg=color)
+        else:
+            stat_lbl.config(text="LOCKED", fg="#ff3333")
                 
-    def _on_timer_complete(self) -> None:
+    def _on_timer_complete(self, timer_id: str) -> None:
         """Handle timer completion - flash the display."""
-        self._is_flashing = True
-        self._time_label.config(fg="#ff0000")
-        self._status_label.config(text="⏰ COMPLETE!", fg="#ff0000")
+        self._is_flashing[timer_id] = True
         
-        # Flash effect
-        self._flash_count = 0
-        self._flash_display()
+        lbl = self._get_time_label(timer_id)
+        stat = self._get_stat_label(timer_id)
+        
+        lbl.config(fg="#ff0000")
+        stat.config(text="COMPLETE!", fg="#ff0000")
+        
+        # Start flash loop for this timer
+        self._flash_display(timer_id, 0)
+        
+    def _get_time_label(self, timer_id: str):
+        if timer_id == "mushroom": return self._mushroom_time_label
+        elif timer_id == "cow": return self._cow_time_label
+        return self._main_time_label
+        
+    def _get_stat_label(self, timer_id: str):
+        if timer_id == "mushroom": return self._mushroom_status_label
+        elif timer_id == "cow": return self._cow_status_label
+        return self._main_status_label
     
-    def _flash_display(self) -> None:
+    def _flash_display(self, timer_id: str, count: int) -> None:
         """Create a flashing effect when timer completes."""
-        if self._flash_count >= 10:  # Flash 5 times (on/off)
-            self._is_flashing = False
-            self._time_label.config(fg=self.TEXT_COLOR_IDLE)
-            self._status_label.config(text="IDLE", fg=self.TEXT_COLOR_IDLE)
+        lbl = self._get_time_label(timer_id)
+        stat = self._get_stat_label(timer_id)
+        
+        if count >= 10:  # Flash 5 times (on/off)
+            self._is_flashing[timer_id] = False
+            lbl.config(fg=self.TEXT_COLOR_IDLE)
+            stat.config(fg=self.TEXT_COLOR_IDLE)
             return
         
         # Toggle visibility
-        current_color = self._time_label.cget("fg")
+        current_color = lbl.cget("fg")
         new_color = self.BG_COLOR if current_color != self.BG_COLOR else "#ff0000"
-        self._time_label.config(fg=new_color)
+        lbl.config(fg=new_color)
         
-        self._flash_count += 1
-        self._root.after(200, self._flash_display)
+        self._root.after(200, lambda: self._flash_display(timer_id, count + 1))
     
     def _toggle_pause(self):
         if self._controller.is_running:
@@ -369,7 +434,10 @@ class OverlayWindow:
         if self._is_locked:
             # 1. Visual change
             self._root.attributes("-alpha", 0.7)
-            self._status_label.config(text="LOCKED", fg="#ff3333")
+            self._status_label = self._main_status_label  # Legacy map for _toggle_lock
+            self._main_status_label.config(text="LOCKED", fg="#ff3333")
+            self._mushroom_status_label.config(text="LOCKED", fg="#ff3333")
+            self._cow_status_label.config(text="LOCKED", fg="#ff3333")
             
             # 2. Use Tkinter's native transparent color (makes background click-through)
             self._root.attributes("-transparentcolor", self.BG_COLOR)
@@ -378,7 +446,14 @@ class OverlayWindow:
             self._root.unbind("<Button-1>")
             self._root.unbind("<Button-3>")
             self._frame.unbind("<Button-1>")
-            for widget in (self._time_label, self._status_label, self._alarm_label):
+            self._sub_frame.unbind("<Button-1>")
+            
+            widgets = (
+                self._main_time_label, self._main_status_label,
+                self._mushroom_time_label, self._mushroom_status_label,
+                self._cow_time_label, self._cow_status_label, self._alarm_label
+            )
+            for widget in widgets:
                 widget.unbind("<Button-1>")
         else:
             # 1. Restore visual
@@ -431,15 +506,21 @@ class OverlayWindow:
 
     def _hotkey_loop(self):
         """Win32 Hotkey message loop."""
-        # VK_L is 0x4C (Key 'L')
         VK_L = 0x4C
+        VK_M = 0x4D
+        VK_C = 0x43
+        VK_V = 0x56
         
         # 1. Register Lock hotkey
         if not user32.RegisterHotKey(None, HOTKEY_ID, MOD_CONTROL | MOD_SHIFT, VK_L):
             print("Failed to register lock hotkey.")
 
-        # 2. Register Preset hotkeys (Ctrl+Shift+1...9)
-        # VK_1 is 0x31, VK_2 is 0x32, etc.
+        # 2. Register special timer hotkeys
+        user32.RegisterHotKey(None, MUSHROOM_HOTKEY_ID, MOD_CONTROL | MOD_SHIFT, VK_M)
+        user32.RegisterHotKey(None, COW_5M_HOTKEY_ID, MOD_CONTROL | MOD_SHIFT, VK_C)
+        user32.RegisterHotKey(None, COW_V_HOTKEY_ID, MOD_CONTROL | MOD_SHIFT, VK_V)
+
+        # 3. Register Preset hotkeys (Ctrl+Shift+1...9)
         for i in range(min(9, len(self._controller.countdown_presets))):
             vk_key = 0x31 + i  # 0x31 is '1'
             user32.RegisterHotKey(None, PRESET_HOTKEY_BASE_ID + i, MOD_CONTROL | MOD_SHIFT, vk_key)
@@ -451,6 +532,12 @@ class OverlayWindow:
                     hid = msg.wParam
                     if hid == HOTKEY_ID:
                         self._root.after(0, self._toggle_lock)
+                    elif hid == MUSHROOM_HOTKEY_ID:
+                        self._root.after(0, lambda: self._controller.start_timer("mushroom", 3600.0, "feed_mushroom.wav"))
+                    elif hid == COW_5M_HOTKEY_ID:
+                        self._root.after(0, lambda: self._controller.start_timer("cow", 300.0, "cow_normal.wav"))
+                    elif hid == COW_V_HOTKEY_ID:
+                        self._root.after(0, lambda: self._controller.start_timer("cow", 1500.0, "cow_vip.wav"))
                     elif PRESET_HOTKEY_BASE_ID <= hid < PRESET_HOTKEY_BASE_ID + 9:
                         idx = hid - PRESET_HOTKEY_BASE_ID
                         # Apply preset on main thread
@@ -460,6 +547,9 @@ class OverlayWindow:
                 user32.DispatchMessageW(ctypes.byref(msg))
         finally:
             user32.UnregisterHotKey(None, HOTKEY_ID)
+            user32.UnregisterHotKey(None, MUSHROOM_HOTKEY_ID)
+            user32.UnregisterHotKey(None, COW_5M_HOTKEY_ID)
+            user32.UnregisterHotKey(None, COW_V_HOTKEY_ID)
             for i in range(9):
                 user32.UnregisterHotKey(None, PRESET_HOTKEY_BASE_ID + i)
 

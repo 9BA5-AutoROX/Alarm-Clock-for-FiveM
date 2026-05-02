@@ -1,19 +1,12 @@
 [
     {
-        "name": "Feed Mushroom",
-        "time": [
-            1,
-            0,
-            0
-        ]
-    },
-    {
         "name": "Hatch Egg",
         "time": [
             0,
             30,
             0
-        ]
+        ],
+        "sound": "hatch_egg.wav"
     },
     {
         "name": "Upgrade Mushroom",
@@ -21,6 +14,7 @@
             0,
             10,
             0
-        ]
+        ],
+        "sound": "upgrade_mushroom.wav"
     }
 ]
